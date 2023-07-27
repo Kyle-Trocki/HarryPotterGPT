@@ -135,9 +135,24 @@ print(loss.item())
 
 print(decode(m.generate(idx= idx, max_new_tokens=500)[0].tolist()))
 
+# Now we need to add some context 
+eval_iters = 200
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+model = BigramLanguageModel(vocab_size)
+m = model.to(device)
 
-
-
+def estimate_loss():
+    out = {}
+    model.eval()
+    for split in ['train', 'val']:
+        losses = torch.zeros(eval_iters)
+        for k in range(eval_iters):
+            X,Y = get_batch(split)
+            logits, loss = model(X,Y)
+            losses[k] = loss.item()
+        out[split] = losses.mean()
+    model.train()
+    return out
 
 
 
