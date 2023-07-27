@@ -53,7 +53,7 @@ def get_batch(split):
     return x, y
 
 
-@torch.no_grad()
+@torch.no_grad() # No back propagation call so dont need to store intermediate vars and makes much more memory efficient
 def estimate_loss():
     out = {}
     model.eval()
