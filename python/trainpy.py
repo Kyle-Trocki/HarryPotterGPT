@@ -21,6 +21,7 @@ eval_interval = 300
 learning_rate = 1e-2
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 eval_iters = 200
+embeddingDimensions = 32 # number of dimensional embeddings
 
 file_name = "../books/1_The_Philosophers_Stone.txt"
 with open(file_name, 'r', encoding='utf-8') as f:
@@ -53,7 +54,7 @@ def get_batch(split):
     return x, y
 
 
-@torch.no_grad() # No back propagation call so dont need to store intermediate vars and makes much more memory efficient
+@torch.no_grad()
 def estimate_loss():
     out = {}
     model.eval()
@@ -68,14 +69,21 @@ def estimate_loss():
     return out
 
 class BigramLanguageModel(nn.Module):
-    def __init__(self, vocab_size):
+    def __init__(self):
         super().__init__()
-        self.token_embedding_table = nn.Embedding(vocab_size, vocab_size)
+        self.token_embedding_table = nn.Embedding(vocab_size, embeddingDimensions)
+        self.position_embedding_table = nn.Embedding(block_size, embeddingDimensions)
+        self.lm_head = nn.Linear(embeddingDimensions, vocab_size)
         
         
     def forward(self, idx, targets=None):
-        # Here index (idx) and the targets are (B,T) tensor of integers
-        logits = self.token_embedding_table(idx) 
+        B, T = idx.shape
+        token_embeddings = self.token_embedding_table(idx) # Get the embeddings for the tokens (B, T, C)
+        position_embedding = self.position_embedding_table(torch.arange(T, device=device)) # Get the embeddings for the position (T, C)- integers from 0 to T-1
+        x = token_embeddings + position_embedding # Add the two embeddings together (B, T, C)
+        logits = self.lm_head(x) # Get the logits for the next token (B, T, vocab_size) 
+
+
         # Torch will arrange as batch, time, channel (B, T, C) Tensor
         # we extract out the logits (row in the vocab_size by vocab size tensor)
         # this scores them based on the next character prediction
@@ -103,14 +111,15 @@ class BigramLanguageModel(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1) #(B, T+1)
         return idx
 
-model = BigramLanguageModel(vocab_size)
+model = BigramLanguageModel()
 m = model.to(device)
 
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
+# This is the training loop here
 for iter in range(max_iterations):
     if iter % eval_interval == 0: # Check how training vs Validation is going
-        losses = estimate_loss()
+        losses = estimate_loss() # averages loss over multiple batches to make less noisy then random loss on each batch
         print(f"Step {iter}: Train loss={losses['train']:.4f}, Validation Loss={losses['val']:.4f}")
 
     xb,yb = get_batch('train')
